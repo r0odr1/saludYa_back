@@ -31,7 +31,6 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-console.log("URI:", process.env.MONGODB_URI);
 
 app.listen(PORT, () => {
   console.log(colors.cyan.bold(`Servidor SaludYa corriendo en el puerto ${PORT}`));
