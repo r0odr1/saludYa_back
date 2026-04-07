@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "seed": "node seeds/seed.js"
   },
+  "type": "module",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "colors": "^1.4.0",
