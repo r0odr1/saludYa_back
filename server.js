@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import connectDB from "./config/database.js";
+import authRoutes from './routes/auth.js';
 import colors from "colors";
 
 const app = express();
@@ -10,6 +11,9 @@ connectDB();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+/** Rutas */
+app.use('/api/auth', authRoutes);
 
 /** Ruta de health chechk */
 app.get("/api/health", (req, res) => {
