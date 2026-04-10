@@ -34,6 +34,30 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    /** Verificacion de la cuenta */
+    cuentaVerificada: {
+      type: Boolean,
+      default: false
+    },
+    codigoVerificacion: {
+      type: String,
+      default: null
+    },
+    codigoVerificacionExpira: {
+      type: Date,
+      default: null
+    },
+
+    /** Restablecimiento de contrasena */
+    codigoReset: {
+      type: String,
+      default: null
+    },
+    codigoResetExpira: {
+      type: Date,
+      default: null
+    }
   },
   {
     timestamps: true,
@@ -53,10 +77,28 @@ userSchema.methods.compararPassword = async function (passwordIngresada) {
   return await bcrypt.compare(passwordIngresada, this.password);
 };
 
+/** Verificar codigo de verificacion */
+userSchema.methods.verificarCodigo = function(codigo) {
+  if(!this.codigoVerificacion || !this.codigoVerificacionExpira) return false;
+  if(new Date() > this.codigoVerificacionExpira) return false;
+  return this.codigoVerificacion === codigo;
+}
+
+/** Verificar codigo reset */
+userSchema.methods.verificarCodigoReset = function(codigo) {
+  if(!this.codigoReset || !this.codigoResetExpira) return false;
+  if(new Date() > this.codigoResetExpira) return false;
+  return this.codigoReset === codigo;
+}
+
 /** No devolver contraseña en JSON */
 userSchema.methods.toJSON = function () {
   const user = this.toObject();
   delete user.password;
+  delete user.codigoVerificacion;
+  delete user.codigoVerificacionExpira;
+  delete user.codigoReset;
+  delete user.codigoResetExpira;
   return user;
 };
 
