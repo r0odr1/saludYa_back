@@ -128,7 +128,7 @@ export const verificarCuenta = async (req, res) => {
 
 /** Reenviar codigo de verificacion */
 /** POST /api/auth/reenviar-codigo */
-// ============================================================
+
 export const reenviarCodigo = async (req, res) => {
   try {
     const { email } = req.body;
