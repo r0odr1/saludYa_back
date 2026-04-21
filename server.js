@@ -5,6 +5,7 @@ import express from "express";
 import morgan from "morgan";
 import connectDB from "./config/database.js";
 import authRoutes from "./routes/auth.js";
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(morgan("dev"));
 
 /** Rutas */
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 
 /** Ruta de health chechk */
 app.get("/api/health", (req, res) => {
