@@ -24,6 +24,7 @@ app.use(morgan("dev"));
 
 /** Rutas */
 app.use("/api/auth", authRoutes);
+app.use('/api/admin', require('./routes/admin'));
 
 /** Ruta de health chechk */
 app.get("/api/health", (req, res) => {
