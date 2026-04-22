@@ -91,3 +91,80 @@ export const obtenerDisponibilidad = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener disponibilidad', error: error.message });
   }
 };
+
+/** Agendar Cita */
+/** POST /api/citas */
+export const agendarCita = async (req, res) => {
+  try {
+    const { doctorId, especialidadId, fecha, horaInicio } = req.body;
+    const pacienteId = req.usuario._id;
+
+    /** Verificar que el doctor existe */
+    const doctor = await Doctor.findById(doctorId);
+
+    if (!doctor) {
+      return res.status(404).json({ mensaje: 'Doctor no encontrado' });
+    }
+
+    /** Verificar que la especialidad existe */
+    const especialidad = await Especialidad.findById(especialidadId);
+
+    if (!especialidad) {
+      return res.status(404).json({ mensaje: 'Especialidad no encontrada' });
+    }
+
+    /** Calcular hora fin */
+    const [h, m] = horaInicio.split(':').map(Number);
+    const minutosFin = h * 60 + m + (especialidad.duracionMinutos || 30);
+    const horaFin = `${String(Math.floor(minutosFin / 60)).padStart(2, '0')}:${String(minutosFin % 60).padStart(2, '0')}`;
+
+    /** Verificar que el horario no esté ocupado - si hay alguna concurrencia */
+    const citaExistente = await Cita.findOne({
+      doctor: doctorId,
+      fecha: {
+        $gte: new Date(new Date(fecha).setHours(0, 0, 0, 0)),
+        $lte: new Date(new Date(fecha).setHours(23, 59, 59, 999))
+      },
+      horaInicio,
+      estado: 'agendada'
+    });
+
+    if (citaExistente) {
+      return res.status(409).json({ mensaje: 'Este horario ya fue tomado por otro paciente. Por favor seleccione otro.' });
+    }
+
+    /** Verificar que la fecha/hora no sea pasada */
+    const fechaCita = new Date(fecha);
+    const [hCita, mCita] = horaInicio.split(':').map(Number);
+    fechaCita.setHours(hCita, mCita, 0, 0);
+
+    if (fechaCita <= new Date()) {
+      return res.status(400).json({ mensaje: 'No puede agendar en una fecha/hora pasada.' });
+    }
+
+    const cita = await Cita.create({
+      paciente: pacienteId,
+      doctor: doctorId,
+      especialidad: especialidadId,
+      fecha: new Date(fecha),
+      horaInicio,
+      horaFin,
+      estado: 'agendada'
+    });
+
+    const citaPopulada = await Cita.findById(cita._id)
+      .populate('paciente', 'nombre email telefono')
+      .populate({
+        path: 'doctor',
+        populate: { path: 'usuario', select: 'nombre email' }
+      })
+      .populate('especialidad');
+
+    res.status(201).json({
+      mensaje: 'Cita agendada exitosamente',
+      cita: citaPopulada
+    });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al agendar cita', error: error.message });
+  }
+};
