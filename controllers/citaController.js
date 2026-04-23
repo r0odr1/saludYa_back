@@ -199,3 +199,73 @@ export const misCitas = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener citas', error: error.message });
   }
 };
+
+/** Editar Cita - Paciente */
+/** PUT /api/citas/:id */
+export const editarCita = async (req, res) => {
+  try {
+    const cita = await Cita.findById(req.params.id);
+
+    if (!cita) {
+      return res.status(404).json({ mensaje: 'Cita no encontrada' });
+    }
+
+    /** Solo el paciente dueño puede editar */
+    if (cita.paciente.toString() !== req.usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'No tiene permisos para editar esta cita.' });
+    }
+
+    /** Verificar restriccion de 3 horas */
+    if (!cita.esCancelable()) {
+      return res.status(400).json({ mensaje: 'No se puede modificar la cita. Faltan menos de 3 horas para su cita.' });
+    }
+
+    const { fecha, horaInicio, doctorId } = req.body;
+
+    /** Si cambia horario, verificar disponibilidad */
+    if (fecha || horaInicio) {
+      const nuevaFecha = fecha || cita.fecha;
+      const nuevaHora = horaInicio || cita.horaInicio;
+      const doctorCheck = doctorId || cita.doctor;
+
+      const conflicto = await Cita.findOne({
+        _id: { $ne: cita._id }, doctor: doctorCheck,
+        fecha: {
+          $gte: new Date(new Date(nuevaFecha).setHours(0, 0, 0, 0)),
+          $lte: new Date(new Date(nuevaFecha).setHours(23, 59, 59, 999))
+        },
+        horaInicio: nuevaHora,
+        estado: 'agendada'
+      });
+
+      if (conflicto) return res.status(409).json({ mensaje: 'El nuevo horario no está disponible.' });
+
+      /** Calcular nueva hora fin */
+      const especialidad = await Especialidad.findById(cita.especialidad);
+      const [hh, mm] = nuevaHora.split(':').map(Number);
+      const minFin = hh * 60 + mm + (especialidad?.duracionMinutos || 30);
+      const nuevaHoraFin = `${String(Math.floor(minFin / 60)).padStart(2, '0')}:${String(minFin % 60).padStart(2, '0')}`;
+
+      cita.fecha = new Date(nuevaFecha);
+      cita.horaInicio = nuevaHora;
+      cita.horaFin = nuevaHoraFin;
+    }
+
+    if (doctorId) {
+      cita.doctor = doctorId;
+    }
+
+    await cita.save();
+
+    const citaActualizada = await Cita.findById(cita._id)
+      .populate('paciente', 'nombre email')
+      .populate({
+        path: 'doctor',
+        populate: { path: 'usuario', select: 'nombre email' } })
+      .populate('especialidad');
+
+    res.json({ mensaje: 'Cita actualizada', cita: citaActualizada });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al editar cita', error: error.message });
+  }
+};
