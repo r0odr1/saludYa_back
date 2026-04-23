@@ -168,3 +168,34 @@ export const agendarCita = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al agendar cita', error: error.message });
   }
 };
+
+/** Mis Citas - Paciente */
+/** GET /api/citas/mis-citas */
+export const misCitas = async (req, res) => {
+  try {
+    const citas = await Cita.find({ paciente: req.usuario._id })
+      .populate({
+        path: 'doctor',
+        populate: {
+          path: 'usuario',
+          select: 'nombre email'
+        }
+      })
+      .populate('especialidad')
+      .sort({
+        fecha: -1,
+        horaInicio: 1
+      });
+
+      /** Agregar flag de cancelable a cada cita */
+    const citasConFlag = citas.map(cita => {
+      const citaObj = cita.toObject();
+      citaObj.esCancelable = cita.esCancelable();
+      return citaObj;
+    });
+
+    res.json({ citas: citasConFlag });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener citas', error: error.message });
+  }
+};
