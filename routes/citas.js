@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import { obtenerDisponibilidad, agendarCita, misCitas, editarCita, cancelarCita } from '../controllers/citaController.js';
+import { listarEspecialidades, listarDoctores } from '../controllers/adminController.js';
 import { auth, autorizar } from '../middleware/auth.js';
 
 const router = Router();
 
 /** --- Rutas publicas - requieren auth pero no rol especifico --- */
+/** Especialidades - lectura para todos los autenticados */
+router.get('/especialidades', auth, listarEspecialidades);
+
+/** Listar todos los doctores - para reasignacion y consultas */
+router.get('/doctores', auth, autorizar('doctor', 'admin'), listarDoctores);
 /** Disponibilidad */
 router.get('/disponibilidad/:doctorId/:fecha', auth, obtenerDisponibilidad);
 

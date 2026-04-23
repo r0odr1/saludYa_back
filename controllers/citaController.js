@@ -297,3 +297,6 @@ export const cancelarCita = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al cancelar cita', error: error.message });
   }
 };
+
+/** Funciones del Doctor */
+/** GET /api/citas/doctor/agenda */
