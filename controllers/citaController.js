@@ -300,3 +300,40 @@ export const cancelarCita = async (req, res) => {
 
 /** Funciones del Doctor */
 /** GET /api/citas/doctor/agenda */
+export const agendaDoctor = async (req, res) => {
+  try {
+    const doctor = await Doctor.findOne({ usuario: req.usuario._id });
+
+    if (!doctor) {
+      return res.status(404).json({ mensaje: 'Perfil de doctor no encontrado' });
+    }
+
+    const { fecha, estado } = req.query;
+    const filtro = { doctor: doctor._id };
+
+    if (fecha) {
+      const fechaConsulta = new Date(fecha);
+      filtro.fecha = {
+        $gte: new Date(fechaConsulta.setHours(0, 0, 0, 0)),
+        $lte: new Date(fechaConsulta.setHours(23, 59, 59, 999))
+      };
+    }
+
+    if (estado) {
+      filtro.estado = estado;
+    }
+
+    const citas = await Cita.find(filtro)
+      .populate('paciente', 'nombre email telefono')
+      .populate('especialidad')
+      .populate({
+        path: 'notas.doctor',
+        select: 'nombre'
+      })
+      .sort({ fecha: 1, horaInicio: 1 });
+
+    res.json({ citas });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener agenda', error: error.message });
+  }
+};
