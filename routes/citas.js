@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { obtenerDisponibilidad, agendarCita, misCitas, editarCita, cancelarCita, agendaDoctor } from '../controllers/citaController.js';
+import { obtenerDisponibilidad, agendarCita, misCitas, editarCita, cancelarCita, agendaDoctor, doctoresPorEspecialidad } from '../controllers/citaController.js';
 import { listarEspecialidades, listarDoctores } from '../controllers/adminController.js';
 import { auth, autorizar } from '../middleware/auth.js';
 
@@ -11,6 +11,10 @@ router.get('/especialidades', auth, listarEspecialidades);
 
 /** Listar todos los doctores - para reasignacion y consultas */
 router.get('/doctores', auth, autorizar('doctor', 'admin'), listarDoctores);
+
+/** Doctores por especialidad */
+router.get('/doctores-por-especialidad/:especialidadId', auth, doctoresPorEspecialidad);
+
 /** Disponibilidad */
 router.get('/disponibilidad/:doctorId/:fecha', auth, obtenerDisponibilidad);
 

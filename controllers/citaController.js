@@ -337,3 +337,17 @@ export const agendaDoctor = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener agenda', error: error.message });
   }
 };
+
+/** GET /api/citas/doctores-por-especialidad/:especialidadId */
+export const doctoresPorEspecialidad = async (req, res) => {
+  try {
+    const doctores = await Doctor.find({
+      especialidades: req.params.especialidadId,
+      activo: true
+    }).populate('usuario', 'nombre email');
+
+    res.json({ doctores });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener doctores', error: error.message });
+  }
+};
