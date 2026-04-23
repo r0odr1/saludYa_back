@@ -269,3 +269,31 @@ export const editarCita = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al editar cita', error: error.message });
   }
 };
+
+/** Cancelar Cita - Paciente */
+/** DELETE /api/citas/:id */
+export const cancelarCita = async (req, res) => {
+  try {
+    const cita = await Cita.findById(req.params.id);
+
+    if (!cita) {
+      return res.status(404).json({ mensaje: 'Cita no encontrada' });
+    }
+
+    if (cita.paciente.toString() !== req.usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'No tiene permisos para cancelar esta cita.' });
+    }
+
+    if (!cita.esCancelable()) {
+      return res.status(400).json({ mensaje: 'No se puede cancelar. Faltan menos de 3 horas para su cita.' });
+    }
+
+    cita.estado = 'cancelada';
+    await cita.save();
+
+    /** El horario queda libre automaticamente porque filtramos por estado = agendada */
+    res.json({ mensaje: 'Cita cancelada. El horario queda disponible para otros pacientes.' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al cancelar cita', error: error.message });
+  }
+};
