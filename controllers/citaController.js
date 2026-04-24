@@ -398,6 +398,38 @@ export const reasignarCita = async (req, res) => {
   }
 };
 
+/** POST /api/citas/:id/notas */
+export const agregarNota = async (req, res) => {
+  try {
+    const { contenido } = req.body;
+    const cita = await Cita.findById(req.params.id);
+
+    if (!cita) {
+      return res.status(404).json({ mensaje: 'Cita no encontrada' });
+    }
+
+    cita.notas.push({
+      doctor: req.usuario._id,
+      contenido,
+      fecha: new Date()
+    });
+
+    await cita.save();
+
+    const citaActualizada = await Cita.findById(cita._id)
+      .populate('paciente', 'nombre email')
+      .populate({
+        path: 'notas.doctor',
+        select: 'nombre'
+      })
+      .populate('especialidad');
+
+    res.json({ mensaje: 'Nota agregada', cita: citaActualizada });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al agregar nota', error: error.message });
+  }
+};
+
 /** GET /api/citas/doctores-por-especialidad/:especialidadId */
 export const doctoresPorEspecialidad = async (req, res) => {
   try {
