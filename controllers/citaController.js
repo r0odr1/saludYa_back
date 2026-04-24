@@ -438,13 +438,38 @@ export const completarCita = async (req, res) => {
     if (!cita) {
       return res.status(404).json({ mensaje: 'Cita no encontrada' });
     }
-    
+
     cita.estado = 'completada';
     await cita.save();
 
     res.json({ mensaje: 'Cita marcada como completada' });
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al completar cita', error: error.message });
+  }
+};
+
+/** GET /api/citas/historial/:pacienteId */
+export const historialPaciente = async (req, res) => {
+  try {
+    const citas = await Cita.find({
+      paciente: req.params.pacienteId,
+      estado: { $in: ['completada', 'agendada'] }
+    })
+      .populate('paciente', 'nombre email telefono')
+      .populate({
+        path: 'doctor',
+        populate: { path: 'usuario', select: 'nombre email' }
+      })
+      .populate('especialidad')
+      .populate({
+        path: 'notas.doctor',
+        select: 'nombre'
+      })
+      .sort({ fecha: -1 });
+
+    res.json({ historial: citas });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener historial', error: error.message });
   }
 };
 
@@ -461,3 +486,25 @@ export const doctoresPorEspecialidad = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener doctores', error: error.message });
   }
 };
+
+/** Utilidades */
+/** Funcion helper - generar slots de tiempo */
+function generarSlots(horaInicio, horaFin, intervalo) {
+  const slots = [];
+  const [hI, mI] = horaInicio.split(':').map(Number);
+  const [hF, mF] = horaFin.split(':').map(Number);
+
+  let minActual = hI * 60 + mI;
+  const minFin = hF * 60 + mF;
+
+  while (minActual + intervalo <= minFin) {
+    const inicio = `${String(Math.floor(minActual / 60)).padStart(2, '0')}:${String(minActual % 60).padStart(2, '0')}`;
+    const finSlot = minActual + intervalo;
+    const fin = `${String(Math.floor(finSlot / 60)).padStart(2, '0')}:${String(finSlot % 60).padStart(2, '0')}`;
+
+    slots.push({ inicio, fin });
+    minActual = finSlot;
+  }
+
+  return slots;
+}
