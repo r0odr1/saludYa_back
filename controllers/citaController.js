@@ -430,6 +430,24 @@ export const agregarNota = async (req, res) => {
   }
 };
 
+/** PUT /api/citas/:id/completar */
+export const completarCita = async (req, res) => {
+  try {
+    const cita = await Cita.findById(req.params.id);
+
+    if (!cita) {
+      return res.status(404).json({ mensaje: 'Cita no encontrada' });
+    }
+    
+    cita.estado = 'completada';
+    await cita.save();
+
+    res.json({ mensaje: 'Cita marcada como completada' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al completar cita', error: error.message });
+  }
+};
+
 /** GET /api/citas/doctores-por-especialidad/:especialidadId */
 export const doctoresPorEspecialidad = async (req, res) => {
   try {
