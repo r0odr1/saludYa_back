@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { obtenerDisponibilidad, agendarCita, misCitas, editarCita, cancelarCita, agendaDoctor, doctoresPorEspecialidad } from '../controllers/citaController.js';
+import { obtenerDisponibilidad, agendarCita, misCitas, editarCita, cancelarCita, agendaDoctor, reasignarCita, doctoresPorEspecialidad } from '../controllers/citaController.js';
 import { listarEspecialidades, listarDoctores } from '../controllers/adminController.js';
 import { auth, autorizar } from '../middleware/auth.js';
 
@@ -26,5 +26,6 @@ router.delete('/:id', auth, autorizar('paciente'), cancelarCita);
 
 /** --- Rutas de doctor --- */
 router.get('/doctor/agenda', auth, autorizar('doctor'), agendaDoctor);
+router.put('/:id/reasignar', auth, autorizar('doctor'), reasignarCita);
 
 export default router;

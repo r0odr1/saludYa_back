@@ -338,6 +338,66 @@ export const agendaDoctor = async (req, res) => {
   }
 };
 
+/** PUT /api/citas/:id/reasignar */
+export const reasignarCita = async (req, res) => {
+  try {
+    const { nuevoDoctorId } = req.body;
+
+    const doctorActual = await Doctor.findOne({ usuario: req.usuario._id });
+
+    if (!doctorActual) {
+      return res.status(404).json({ mensaje: 'Perfil de doctor no encontrado' });
+    }
+
+    const cita = await Cita.findById(req.params.id);
+
+    if (!cita) {
+      return res.status(404).json({ mensaje: 'Cita no encontrada' });
+    }
+
+    /** Verificar que la cita pertenece al doctor actual */
+    if (cita.doctor.toString() !== doctorActual._id.toString()) {
+      return res.status(403).json({ mensaje: 'Esta cita no le pertenece.' });
+    }
+
+    /** Verificar que el nuevo doctor existe y esta disponible en ese horario */
+    const nuevoDoctor = await Doctor.findById(nuevoDoctorId);
+
+    if (!nuevoDoctor || !nuevoDoctor.activo) {
+      return res.status(404).json({ mensaje: 'Doctor de destino no encontrado o inactivo.' });
+    }
+
+    /** Verificar disponibilidad del nuevo doctor */
+    const conflicto = await Cita.findOne({
+      doctor: nuevoDoctorId,
+      fecha: cita.fecha,
+      horaInicio: cita.horaInicio,
+      estado: 'agendada'
+    });
+
+    if (conflicto) {
+      return res.status(409).json({ mensaje: 'El doctor seleccionado no está disponible en ese horario.' });
+    }
+
+    cita.doctorOriginal = doctorActual._id;
+    cita.reasignadaPor = req.usuario._id;
+    cita.doctor = nuevoDoctorId;
+    await cita.save();
+
+    const citaActualizada = await Cita.findById(cita._id)
+      .populate('paciente', 'nombre email')
+      .populate({
+        path: 'doctor',
+        populate: { path: 'usuario', select: 'nombre email' }
+      })
+      .populate('especialidad');
+
+    res.json({ mensaje: 'Cita reasignada exitosamente', cita: citaActualizada });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al reasignar cita', error: error.message });
+  }
+};
+
 /** GET /api/citas/doctores-por-especialidad/:especialidadId */
 export const doctoresPorEspecialidad = async (req, res) => {
   try {
