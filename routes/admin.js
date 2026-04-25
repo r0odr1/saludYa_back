@@ -12,7 +12,7 @@ const router = Router();
 /** Todas las rutas requieren auth + rol admin */
 router.use(auth, autorizar('admin'));
 
-/** Usuarios - gestión de roles) */
+/** Usuarios - gestión de roles */
 router.get('/usuarios', listarUsuarios);
 router.put('/usuarios/:id/rol', cambiarRol);
 
