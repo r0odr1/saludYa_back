@@ -1,0 +1,1811 @@
+openapi: 3.0.3
+info:
+  title: SaludYa API
+  description: |
+    API REST para el sistema de gestión de citas de fisioterapia **SaludYa**.
+
+    ## Roles del sistema
+    - **Paciente**: Se registra, agenda citas, edita/cancela con restricción de 3 horas.
+    - **Doctor**: Ve su agenda, agrega notas médicas, reasigna citas, completa atenciones.
+    - **Admin**: Gestiona doctores, especialidades, usuarios (cambio de roles) y reportes.
+
+    ## Autenticación
+    Se usa **JWT (JSON Web Token)**. Después del login, incluye el token en el header:
+    ```
+    Authorization: Bearer <token>
+    ```
+    Las sesiones expiran después de **2 horas** de inactividad.
+
+    ## Flujo de registro
+    1. El paciente se registra → recibe código de 6 dígitos al correo
+    2. Ingresa el código en `/auth/verificar-cuenta`
+    3. Si es correcto, la cuenta se activa y recibe un token JWT
+
+    ## Reglas de negocio
+    - Al agendar una cita, el horario se bloquea automáticamente
+    - Un paciente NO puede editar/cancelar si faltan menos de 3 horas
+    - Al cancelar, el horario se libera para otros pacientes
+    - El doctor puede reasignar pero NO puede eliminar citas
+    - Las notas médicas quedan en el historial del paciente
+  version: 1.0.0
+  contact:
+    name: Equipo SaludYa
+    email: admin@saludya.com
+
+servers:
+  - url: http://localhost:3000/api
+    description: Desarrollo local
+  - url: https://tu-dominio.com/api
+    description: Producción
+
+tags:
+  - name: Auth
+    description: Registro, login, verificación de cuenta y restablecimiento de contraseña
+  - name: Perfil
+    description: Ver y editar perfil del usuario autenticado
+  - name: Citas - Paciente
+    description: Agendar, ver, editar y cancelar citas (rol paciente)
+  - name: Citas - Doctor
+    description: Agenda, notas médicas, reasignación y completar citas (rol doctor)
+  - name: Citas - Consultas
+    description: Especialidades, doctores y disponibilidad (usuarios autenticados)
+  - name: Admin - Doctores
+    description: Registrar y gestionar doctores (rol admin)
+  - name: Admin - Especialidades
+    description: CRUD de especialidades/servicios (rol admin)
+  - name: Admin - Usuarios
+    description: Listar usuarios y cambiar roles (rol admin)
+  - name: Admin - Citas
+    description: "Gestión completa de citas: listar, ver, editar y eliminar (rol admin)"
+  - name: Admin - Reportes
+    description: Estadísticas y métricas del consultorio (rol admin)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido del login o verificación de cuenta
+
+  schemas:
+    # ==================== USUARIO ====================
+    Usuario:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "664f1a2b3c4d5e6f7a8b9c0d"
+        nombre:
+          type: string
+          example: "Juan Pérez"
+        email:
+          type: string
+          format: email
+          example: "juan@mail.com"
+        telefono:
+          type: string
+          example: "3001234567"
+        rol:
+          type: string
+          enum: [paciente, doctor, admin]
+          example: "paciente"
+        cuentaVerificada:
+          type: boolean
+          example: true
+        activo:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # ==================== ESPECIALIDAD ====================
+    Especialidad:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "664f1b2c3d4e5f6a7b8c9d0e"
+        nombre:
+          type: string
+          example: "Electroterapia"
+        descripcion:
+          type: string
+          example: "Terapia con equipos de ultrasonido y estimulación eléctrica"
+        duracionMinutos:
+          type: integer
+          example: 30
+        color:
+          type: string
+          example: "#D97706"
+        activa:
+          type: boolean
+          example: true
+
+    # ==================== DOCTOR ====================
+    Doctor:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "664f1c3d4e5f6a7b8c9d0e1f"
+        usuario:
+          $ref: '#/components/schemas/Usuario'
+        especialidades:
+          type: array
+          items:
+            $ref: '#/components/schemas/Especialidad'
+        horarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Horario'
+        fechasBloqueadas:
+          type: array
+          items:
+            type: object
+            properties:
+              fecha:
+                type: string
+                format: date
+              motivo:
+                type: string
+        activo:
+          type: boolean
+          example: true
+
+    Horario:
+      type: object
+      properties:
+        dia:
+          type: integer
+          description: "0=Domingo, 1=Lunes ... 6=Sábado"
+          example: 1
+        horaInicio:
+          type: string
+          example: "08:00"
+        horaFin:
+          type: string
+          example: "12:00"
+        intervaloMinutos:
+          type: integer
+          example: 30
+
+    # ==================== CITA ====================
+    Cita:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "664f1d4e5f6a7b8c9d0e1f2a"
+        paciente:
+          $ref: '#/components/schemas/Usuario'
+        doctor:
+          $ref: '#/components/schemas/Doctor'
+        especialidad:
+          $ref: '#/components/schemas/Especialidad'
+        fecha:
+          type: string
+          format: date
+          example: "2026-04-14"
+        horaInicio:
+          type: string
+          example: "10:00"
+        horaFin:
+          type: string
+          example: "10:30"
+        estado:
+          type: string
+          enum: [agendada, completada, cancelada, no_asistio]
+          example: "agendada"
+        esCancelable:
+          type: boolean
+          description: "true si faltan más de 3 horas para la cita"
+          example: true
+        notas:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotaMedica'
+        reasignadaPor:
+          type: string
+          nullable: true
+        doctorOriginal:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotaMedica:
+      type: object
+      properties:
+        _id:
+          type: string
+        doctor:
+          $ref: '#/components/schemas/Usuario'
+        contenido:
+          type: string
+          example: "Paciente presenta dolor lumbar leve. Se aplicó electroterapia por 20 min."
+        fecha:
+          type: string
+          format: date-time
+
+    # ==================== DISPONIBILIDAD ====================
+    SlotHorario:
+      type: object
+      properties:
+        inicio:
+          type: string
+          example: "10:00"
+        fin:
+          type: string
+          example: "10:30"
+        disponible:
+          type: boolean
+          example: true
+
+    # ==================== REPORTES ====================
+    Reporte:
+      type: object
+      properties:
+        periodo:
+          type: object
+          properties:
+            inicio:
+              type: string
+              format: date-time
+            fin:
+              type: string
+              format: date-time
+        totalCitas:
+          type: integer
+          example: 24
+        porEspecialidad:
+          type: array
+          items:
+            type: object
+            properties:
+              especialidad:
+                type: string
+                example: "Electroterapia"
+              total:
+                type: integer
+                example: 8
+        porEstado:
+          type: array
+          items:
+            type: object
+            properties:
+              _id:
+                type: string
+                example: "completada"
+              total:
+                type: integer
+                example: 18
+
+    # ==================== RESPUESTAS ====================
+    Error:
+      type: object
+      properties:
+        mensaje:
+          type: string
+          example: "Error descriptivo"
+
+    MensajeExito:
+      type: object
+      properties:
+        mensaje:
+          type: string
+          example: "Operación exitosa"
+
+  responses:
+    Unauthorized:
+      description: Token no proporcionado o inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            mensaje: "Acceso denegado. Token no proporcionado."
+
+    Forbidden:
+      description: No tiene permisos para esta acción
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            mensaje: "No tiene permisos para realizar esta acción."
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            mensaje: "Recurso no encontrado."
+
+# ================================================================
+# PATHS
+# ================================================================
+paths:
+
+  # ==================== AUTH ====================
+
+  /auth/registro:
+    post:
+      tags: [Auth]
+      summary: Registrar paciente
+      description: |
+        Crea un nuevo usuario con rol `paciente`. Envía un código de verificación de 6 dígitos al correo.
+        Si el email ya existe pero no está verificado, reenvía un nuevo código.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, password]
+              properties:
+                nombre:
+                  type: string
+                  example: "Juan Pérez"
+                email:
+                  type: string
+                  format: email
+                  example: "juan@mail.com"
+                password:
+                  type: string
+                  minLength: 8
+                  description: "Mín. 8 caracteres, 1 mayúscula, 1 número"
+                  example: "MiClave123!"
+                telefono:
+                  type: string
+                  example: "3001234567"
+      responses:
+        '201':
+          description: Registro exitoso, código enviado al correo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Registro exitoso. Se envió un código de verificación a tu correo."
+                  requiereVerificacion:
+                    type: boolean
+                    example: true
+                  email:
+                    type: string
+                    example: "juan@mail.com"
+        '400':
+          description: Email ya registrado o contraseña inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/verificar-cuenta:
+    post:
+      tags: [Auth]
+      summary: Verificar cuenta con código de 6 dígitos
+      description: |
+        Valida el código enviado al correo. Si es correcto, activa la cuenta y devuelve un token JWT para login automático.
+        El código expira en **15 minutos**.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, codigo]
+              properties:
+                email:
+                  type: string
+                  example: "juan@mail.com"
+                codigo:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  example: "482715"
+      responses:
+        '200':
+          description: Cuenta verificada, token JWT incluido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Cuenta verificada exitosamente. ¡Bienvenido!"
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIs..."
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+        '400':
+          description: Código incorrecto o expirado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Código incorrecto. Intenta de nuevo."
+                  codigoExpirado:
+                    type: boolean
+                    example: false
+
+  /auth/reenviar-codigo:
+    post:
+      tags: [Auth]
+      summary: Reenviar código de verificación
+      description: Genera y envía un nuevo código de 6 dígitos al correo del usuario no verificado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  example: "juan@mail.com"
+      responses:
+        '200':
+          description: Nuevo código enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Nuevo código enviado a tu correo."
+                  email:
+                    type: string
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      description: |
+        Autentica al usuario con email y contraseña.
+        - Si la cuenta **no está verificada**, devuelve `403` y envía un nuevo código automáticamente.
+        - Si las credenciales son correctas y la cuenta está verificada, devuelve el token JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: "juan@mail.com"
+                password:
+                  type: string
+                  example: "MiClave123!"
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Inicio de sesión exitoso"
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIs..."
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+        '401':
+          description: Credenciales incorrectas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                mensaje: "Credenciales incorrectas."
+        '403':
+          description: Cuenta no verificada (se envió nuevo código)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Tu cuenta no está verificada. Se envió un nuevo código a tu correo."
+                  requiereVerificacion:
+                    type: boolean
+                    example: true
+                  email:
+                    type: string
+
+  /auth/solicitar-reset:
+    post:
+      tags: [Auth]
+      summary: Solicitar restablecimiento de contraseña
+      description: |
+        Envía un código de 6 dígitos al correo para restablecer la contraseña.
+        Por seguridad, siempre responde con éxito aunque el email no exista.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  example: "juan@mail.com"
+      responses:
+        '200':
+          description: Código enviado (o mensaje genérico si el email no existe)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Si el correo está registrado, recibirás un código de restablecimiento."
+                  email:
+                    type: string
+
+  /auth/verificar-reset:
+    post:
+      tags: [Auth]
+      summary: Verificar código de restablecimiento
+      description: |
+        Valida el código de reset. Si es correcto, devuelve un `resetToken` temporal (expira en 10 min)
+        que se usa en el siguiente paso para establecer la nueva contraseña.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, codigo]
+              properties:
+                email:
+                  type: string
+                  example: "juan@mail.com"
+                codigo:
+                  type: string
+                  example: "654321"
+      responses:
+        '200':
+          description: Código verificado, resetToken devuelto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Código verificado. Ahora puedes establecer tu nueva contraseña."
+                  resetToken:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIs..."
+        '400':
+          description: Código incorrecto o expirado
+
+  /auth/nueva-contrasena:
+    post:
+      tags: [Auth]
+      summary: Establecer nueva contraseña
+      description: |
+        Cambia la contraseña usando el `resetToken` obtenido del paso anterior.
+        El token expira en **10 minutos**.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetToken, nuevaPassword]
+              properties:
+                resetToken:
+                  type: string
+                  description: Token obtenido de /auth/verificar-reset
+                  example: "eyJhbGciOiJIUzI1NiIs..."
+                nuevaPassword:
+                  type: string
+                  minLength: 8
+                  description: "Mín. 8 caracteres, 1 mayúscula, 1 número"
+                  example: "NuevaClave456!"
+      responses:
+        '200':
+          description: Contraseña restablecida exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeExito'
+              example:
+                mensaje: "Contraseña restablecida exitosamente. Ya puedes iniciar sesión."
+        '400':
+          description: Token inválido/expirado o contraseña inválida
+
+  # ==================== PERFIL ====================
+
+  /auth/perfil:
+    get:
+      tags: [Perfil]
+      summary: Ver perfil del usuario autenticado
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Datos del perfil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Perfil]
+      summary: Actualizar nombre y teléfono
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                  example: "Juan Actualizado"
+                telefono:
+                  type: string
+                  example: "3109999999"
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Perfil actualizado"
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+
+  /auth/cambiar-contrasena:
+    put:
+      tags: [Perfil]
+      summary: Cambiar contraseña (usuario autenticado)
+      description: Permite cambiar la contraseña estando logueado. Requiere la contraseña actual.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contrasenaActual, nuevaContrasena]
+              properties:
+                contrasenaActual:
+                  type: string
+                  example: "MiClaveActual123!"
+                nuevaContrasena:
+                  type: string
+                  minLength: 8
+                  description: "Mín. 8 caracteres, 1 mayúscula, 1 número"
+                  example: "NuevaClave456!"
+      responses:
+        '200':
+          description: Contraseña cambiada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeExito'
+              example:
+                mensaje: "Contraseña cambiada exitosamente."
+        '400':
+          description: Contraseña actual incorrecta o nueva contraseña inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                mensaje: "La contraseña actual es incorrecta."
+
+  # ==================== CITAS - CONSULTAS ====================
+
+  /citas/especialidades:
+    get:
+      tags: [Citas - Consultas]
+      summary: Listar especialidades activas
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de especialidades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  especialidades:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Especialidad'
+
+  /citas/doctores:
+    get:
+      tags: [Citas - Consultas]
+      summary: Listar todos los doctores
+      description: Solo accesible por doctores y admin (para reasignación)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de doctores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctores:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Doctor'
+
+  /citas/doctores-por-especialidad/{especialidadId}:
+    get:
+      tags: [Citas - Consultas]
+      summary: Doctores que atienden una especialidad
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: especialidadId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "664f1b2c3d4e5f6a7b8c9d0e"
+      responses:
+        '200':
+          description: Doctores de la especialidad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctores:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Doctor'
+
+  /citas/disponibilidad/{doctorId}/{fecha}:
+    get:
+      tags: [Citas - Consultas]
+      summary: Horarios disponibles de un doctor en una fecha
+      description: |
+        Devuelve los slots de tiempo disponibles. Excluye horarios ya agendados,
+        fechas bloqueadas y horarios pasados (si la fecha es hoy).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "664f1c3d4e5f6a7b8c9d0e1f"
+        - name: fecha
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2026-04-14"
+      responses:
+        '200':
+          description: Disponibilidad del doctor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  disponible:
+                    type: boolean
+                    example: true
+                  doctor:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      especialidades:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Especialidad'
+                  fecha:
+                    type: string
+                    example: "2026-04-14"
+                  horarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SlotHorario'
+                  mensaje:
+                    type: string
+                    description: "Presente cuando no hay disponibilidad"
+                    example: "El doctor no atiende este día"
+
+  # ==================== CITAS - PACIENTE ====================
+
+  /citas:
+    post:
+      tags: [Citas - Paciente]
+      summary: Agendar cita
+      description: |
+        Reserva una cita en un horario disponible. El sistema verifica automáticamente
+        que el horario no esté ocupado (previene duplicados por concurrencia).
+        La hora fin se calcula automáticamente según la duración de la especialidad.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doctorId, especialidadId, fecha, horaInicio]
+              properties:
+                doctorId:
+                  type: string
+                  example: "664f1c3d4e5f6a7b8c9d0e1f"
+                especialidadId:
+                  type: string
+                  example: "664f1b2c3d4e5f6a7b8c9d0e"
+                fecha:
+                  type: string
+                  format: date
+                  example: "2026-04-14"
+                horaInicio:
+                  type: string
+                  example: "10:00"
+      responses:
+        '201':
+          description: Cita agendada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Cita agendada exitosamente"
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '409':
+          description: Horario ya ocupado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                mensaje: "Este horario ya fue tomado por otro paciente. Por favor seleccione otro."
+
+  /citas/mis-citas:
+    get:
+      tags: [Citas - Paciente]
+      summary: Mis citas
+      description: |
+        Lista todas las citas del paciente autenticado, ordenadas por fecha descendente.
+        Cada cita incluye un flag `esCancelable` que indica si faltan más de 3 horas.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de citas del paciente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+
+  /citas/{id}:
+    put:
+      tags: [Citas - Paciente]
+      summary: Editar/Reprogramar cita
+      description: |
+        Permite al paciente cambiar la fecha y/o hora de su cita.
+        **Restricción**: No se puede editar si faltan menos de **3 horas**.
+        Verifica que el nuevo horario esté disponible.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fecha:
+                  type: string
+                  format: date
+                  example: "2026-04-15"
+                horaInicio:
+                  type: string
+                  example: "14:00"
+                doctorId:
+                  type: string
+                  description: Opcional, para cambiar de doctor
+      responses:
+        '200':
+          description: Cita actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '400':
+          description: Faltan menos de 3 horas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                mensaje: "No se puede modificar la cita. Faltan menos de 3 horas para su cita."
+        '409':
+          description: Nuevo horario no disponible
+
+    delete:
+      tags: [Citas - Paciente]
+      summary: Cancelar cita
+      description: |
+        Cancela la cita y libera el horario automáticamente.
+        **Restricción**: No se puede cancelar si faltan menos de **3 horas**.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita cancelada, horario liberado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeExito'
+              example:
+                mensaje: "Cita cancelada. El horario queda disponible para otros pacientes."
+        '400':
+          description: Faltan menos de 3 horas
+        '403':
+          description: No es el dueño de la cita
+
+  # ==================== CITAS - DOCTOR ====================
+
+  /citas/doctor/agenda:
+    get:
+      tags: [Citas - Doctor]
+      summary: Ver agenda del doctor
+      description: Lista las citas del doctor autenticado, con filtros opcionales por fecha y estado.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: fecha
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2026-04-14"
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [agendada, completada, cancelada, no_asistio]
+      responses:
+        '200':
+          description: Citas del doctor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+
+  /citas/{id}/reasignar:
+    put:
+      tags: [Citas - Doctor]
+      summary: Reasignar cita a otro doctor
+      description: |
+        El doctor puede reasignar una cita que le pertenece a otro doctor disponible en el mismo horario.
+        **No puede eliminar la cita**, solo reasignarla.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nuevoDoctorId]
+              properties:
+                nuevoDoctorId:
+                  type: string
+                  example: "664f1c3d4e5f6a7b8c9d0e1f"
+      responses:
+        '200':
+          description: Cita reasignada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Cita reasignada exitosamente"
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '409':
+          description: Doctor de destino no disponible en ese horario
+
+  /citas/{id}/notas:
+    post:
+      tags: [Citas - Doctor]
+      summary: Agregar nota médica a una cita
+      description: |
+        Agrega una nota al historial de la cita. Las notas quedan asociadas al doctor
+        que las escribió y son visibles para futuros doctores que atiendan al paciente.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contenido]
+              properties:
+                contenido:
+                  type: string
+                  example: "Paciente presenta dolor lumbar leve. Se aplicó electroterapia por 20 min. Recomendación: reposo 48h."
+      responses:
+        '200':
+          description: Nota agregada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Nota agregada"
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+
+  /citas/{id}/completar:
+    put:
+      tags: [Citas - Doctor]
+      summary: Marcar cita como completada
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita marcada como completada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeExito'
+              example:
+                mensaje: "Cita marcada como completada"
+
+  /citas/historial/{pacienteId}:
+    get:
+      tags: [Citas - Doctor]
+      summary: Historial de citas de un paciente
+      description: |
+        Devuelve todas las citas (completadas y agendadas) de un paciente específico,
+        incluyendo las notas médicas dejadas por cada doctor.
+        Accesible por doctores y admin.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pacienteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Historial del paciente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  historial:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+
+  # ==================== ADMIN - DOCTORES ====================
+
+  /admin/doctores:
+    post:
+      tags: [Admin - Doctores]
+      summary: Registrar un nuevo doctor
+      description: |
+        Crea un usuario con rol `doctor` y su perfil profesional con especialidades y horarios.
+        La cuenta se crea verificada automáticamente.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, password]
+              properties:
+                nombre:
+                  type: string
+                  example: "Dra. María González"
+                email:
+                  type: string
+                  example: "maria@saludya.com"
+                password:
+                  type: string
+                  example: "Doctor123!"
+                telefono:
+                  type: string
+                  example: "3009876543"
+                especialidades:
+                  type: array
+                  items:
+                    type: string
+                  description: Array de IDs de especialidades
+                  example: ["664f1b2c3d4e5f6a7b8c9d0e"]
+                horarios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Horario'
+      responses:
+        '201':
+          description: Doctor registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Doctor registrado exitosamente"
+                  doctor:
+                    $ref: '#/components/schemas/Doctor'
+
+    get:
+      tags: [Admin - Doctores]
+      summary: Listar todos los doctores
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de doctores con usuario y especialidades populados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctores:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Doctor'
+
+  /admin/doctores/{id}:
+    put:
+      tags: [Admin - Doctores]
+      summary: Actualizar doctor
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                especialidades:
+                  type: array
+                  items:
+                    type: string
+                horarios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Horario'
+                activo:
+                  type: boolean
+      responses:
+        '200':
+          description: Doctor actualizado
+
+  # ==================== ADMIN - ESPECIALIDADES ====================
+
+  /admin/especialidades:
+    post:
+      tags: [Admin - Especialidades]
+      summary: Crear especialidad
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre]
+              properties:
+                nombre:
+                  type: string
+                  example: "Electroterapia"
+                descripcion:
+                  type: string
+                  example: "Terapia con equipos de ultrasonido"
+                duracionMinutos:
+                  type: integer
+                  example: 30
+                color:
+                  type: string
+                  example: "#D97706"
+      responses:
+        '201':
+          description: Especialidad creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  especialidad:
+                    $ref: '#/components/schemas/Especialidad'
+
+    get:
+      tags: [Admin - Especialidades]
+      summary: Listar especialidades activas
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de especialidades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  especialidades:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Especialidad'
+
+  /admin/especialidades/{id}:
+    put:
+      tags: [Admin - Especialidades]
+      summary: Actualizar especialidad
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                descripcion:
+                  type: string
+                duracionMinutos:
+                  type: integer
+                color:
+                  type: string
+      responses:
+        '200':
+          description: Especialidad actualizada
+
+    delete:
+      tags: [Admin - Especialidades]
+      summary: Desactivar especialidad
+      description: "No elimina, solo marca como `activa: false`"
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Especialidad desactivada
+
+  # ==================== ADMIN - USUARIOS ====================
+
+  /admin/usuarios:
+    get:
+      tags: [Admin - Usuarios]
+      summary: Listar usuarios
+      description: Lista todos los usuarios con filtros opcionales por rol y búsqueda por nombre/email.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: rol
+          in: query
+          schema:
+            type: string
+            enum: [paciente, doctor, admin]
+          description: Filtrar por rol
+        - name: buscar
+          in: query
+          schema:
+            type: string
+          description: Buscar por nombre o email (búsqueda parcial)
+          example: "juan"
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usuarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Usuario'
+
+    post:
+      tags: [Admin - Usuarios]
+      summary: Crear usuario
+      description: Crea un nuevo usuario con rol seleccionado. Si el rol es `doctor`, crea también el perfil de doctor.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, password, rol]
+              properties:
+                nombre:
+                  type: string
+                  example: "Ana Pérez"
+                email:
+                  type: string
+                  format: email
+                  example: "ana@saludya.com"
+                password:
+                  type: string
+                  example: "SaludYa123"
+                telefono:
+                  type: string
+                  example: "3111234567"
+                rol:
+                  type: string
+                  enum: [paciente, doctor, admin]
+                  example: "paciente"
+                especialidades:
+                  type: array
+                  items:
+                    type: string
+                  description: IDs de especialidades (solo para doctor)
+                horarios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Horario'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+
+  /admin/usuarios/{id}:
+    put:
+      tags: [Admin - Usuarios]
+      summary: Actualizar usuario
+      description: Actualiza nombre, teléfono o estado activo de un usuario existente.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                telefono:
+                  type: string
+                activo:
+                  type: boolean
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+
+    delete:
+      tags: [Admin - Usuarios]
+      summary: Desactivar usuario
+      description: Desactiva un usuario y, si es doctor, desactiva también su perfil de doctor.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Usuario desactivado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+
+  /admin/usuarios/{id}/rol:
+    put:
+      tags: [Admin - Usuarios]
+      summary: Cambiar rol de usuario
+      description: |
+        Cambia el rol de un usuario. Si se cambia a `doctor`, se crea automáticamente
+        su perfil profesional. Si se cambia desde `doctor` a otro rol, el perfil de doctor
+        se desactiva. **No se puede cambiar el rol propio.**
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rol]
+              properties:
+                rol:
+                  type: string
+                  enum: [paciente, doctor, admin]
+                  example: "doctor"
+                especialidades:
+                  type: array
+                  items:
+                    type: string
+                  description: IDs de especialidades (opcional, solo al cambiar a doctor)
+                horarios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Horario'
+                  description: Horarios de atención (opcional, solo al cambiar a doctor)
+      responses:
+        '200':
+          description: Rol cambiado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Rol cambiado de paciente a doctor exitosamente."
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+        '400':
+          description: Rol inválido o intento de cambiar rol propio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/citas:
+    get:
+      tags: [Admin - Citas]
+      summary: Listar citas
+      description: Filtra citas por paciente, doctor, estado o fecha.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pacienteId
+          in: query
+          schema:
+            type: string
+          description: ID del paciente
+        - name: doctorId
+          in: query
+          schema:
+            type: string
+          description: ID del doctor
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [agendada, completada, cancelada, no_asistio]
+          description: Filtrar por estado de cita
+        - name: fecha
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filtrar por fecha de cita
+      responses:
+        '200':
+          description: Lista de citas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+
+  /admin/citas/{id}:
+    get:
+      tags: [Admin - Citas]
+      summary: Obtener cita
+      description: Devuelve una cita por su ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '404':
+          description: Cita no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [Admin - Citas]
+      summary: Actualizar cita
+      description: Permite editar fecha, hora, doctor, especialidad y estado de una cita.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fecha:
+                  type: string
+                  format: date
+                horaInicio:
+                  type: string
+                  example: "10:00"
+                doctorId:
+                  type: string
+                especialidadId:
+                  type: string
+                estado:
+                  type: string
+                  enum: [agendada, completada, cancelada, no_asistio]
+      responses:
+        '200':
+          description: Cita actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+
+    delete:
+      tags: [Admin - Citas]
+      summary: Eliminar cita
+      description: Elimina una cita del sistema.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita eliminada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '404':
+          description: Cita no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ==================== ADMIN - REPORTES ====================
+
+  /admin/reportes:
+    get:
+      tags: [Admin - Reportes]
+      summary: Reportes mensuales
+      description: |
+        Genera estadísticas del mes seleccionado: total de citas, desglose por especialidad
+        (ordenado de mayor a menor) y desglose por estado.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: mes
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          example: 4
+        - name: anio
+          in: query
+          schema:
+            type: integer
+          example: 2026
+      responses:
+        '200':
+          description: Reporte del mes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reporte'
+
+  # ==================== HEALTH CHECK ====================
+
+  /health:
+    get:
+      summary: Health check
+      description: Verifica que la API está funcionando
+      responses:
+        '200':
+          description: API funcionando
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  mensaje:
+                    type: string
+                    example: "SaludYa API funcionando correctamente"
