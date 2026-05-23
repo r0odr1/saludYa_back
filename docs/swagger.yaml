@@ -55,6 +55,8 @@ tags:
     description: CRUD de especialidades/servicios (rol admin)
   - name: Admin - Usuarios
     description: Listar usuarios y cambiar roles (rol admin)
+  - name: Admin - Citas
+    description: "Gestión completa de citas: listar, ver, editar y eliminar (rol admin)"
   - name: Admin - Reportes
     description: Estadísticas y métricas del consultorio (rol admin)
 
@@ -1433,6 +1435,121 @@ paths:
                     items:
                       $ref: '#/components/schemas/Usuario'
 
+    post:
+      tags: [Admin - Usuarios]
+      summary: Crear usuario
+      description: Crea un nuevo usuario con rol seleccionado. Si el rol es `doctor`, crea también el perfil de doctor.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, password, rol]
+              properties:
+                nombre:
+                  type: string
+                  example: "Ana Pérez"
+                email:
+                  type: string
+                  format: email
+                  example: "ana@saludya.com"
+                password:
+                  type: string
+                  example: "SaludYa123"
+                telefono:
+                  type: string
+                  example: "3111234567"
+                rol:
+                  type: string
+                  enum: [paciente, doctor, admin]
+                  example: "paciente"
+                especialidades:
+                  type: array
+                  items:
+                    type: string
+                  description: IDs de especialidades (solo para doctor)
+                horarios:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Horario'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+
+  /admin/usuarios/{id}:
+    put:
+      tags: [Admin - Usuarios]
+      summary: Actualizar usuario
+      description: Actualiza nombre, teléfono o estado activo de un usuario existente.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                telefono:
+                  type: string
+                activo:
+                  type: boolean
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  usuario:
+                    $ref: '#/components/schemas/Usuario'
+
+    delete:
+      tags: [Admin - Usuarios]
+      summary: Desactivar usuario
+      description: Desactiva un usuario y, si es doctor, desactiva también su perfil de doctor.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Usuario desactivado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+
   /admin/usuarios/{id}/rol:
     put:
       tags: [Admin - Usuarios]
@@ -1486,6 +1603,155 @@ paths:
                     $ref: '#/components/schemas/Usuario'
         '400':
           description: Rol inválido o intento de cambiar rol propio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/citas:
+    get:
+      tags: [Admin - Citas]
+      summary: Listar citas
+      description: Filtra citas por paciente, doctor, estado o fecha.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: pacienteId
+          in: query
+          schema:
+            type: string
+          description: ID del paciente
+        - name: doctorId
+          in: query
+          schema:
+            type: string
+          description: ID del doctor
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [agendada, completada, cancelada, no_asistio]
+          description: Filtrar por estado de cita
+        - name: fecha
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filtrar por fecha de cita
+      responses:
+        '200':
+          description: Lista de citas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citas:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+
+  /admin/citas/{id}:
+    get:
+      tags: [Admin - Citas]
+      summary: Obtener cita
+      description: Devuelve una cita por su ID.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '404':
+          description: Cita no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [Admin - Citas]
+      summary: Actualizar cita
+      description: Permite editar fecha, hora, doctor, especialidad y estado de una cita.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fecha:
+                  type: string
+                  format: date
+                horaInicio:
+                  type: string
+                  example: "10:00"
+                doctorId:
+                  type: string
+                especialidadId:
+                  type: string
+                estado:
+                  type: string
+                  enum: [agendada, completada, cancelada, no_asistio]
+      responses:
+        '200':
+          description: Cita actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+
+    delete:
+      tags: [Admin - Citas]
+      summary: Eliminar cita
+      description: Elimina una cita del sistema.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cita eliminada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                  cita:
+                    $ref: '#/components/schemas/Cita'
+        '404':
+          description: Cita no encontrada
           content:
             application/json:
               schema:
