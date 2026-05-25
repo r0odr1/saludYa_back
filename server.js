@@ -17,10 +17,13 @@ connectDB();
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:4200",
+    origin: process.env.CORS_ORIGINS?.split(',') || [
+      "http://localhost:4200",
+    ],
     credentials: true,
   }),
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -34,38 +37,43 @@ app.use('/api/citas', citasRoutes);
 /** Documentacion Swagger - Solo en desarrollo */
 if (process.env.NODE_ENV !== 'production') {
   const swaggerDocument = YAML.load('./docs/swagger.yaml');
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-    customSiteTitle: 'SaludYa API Docs',
-    customCss: '.swagger-ui .topbar { display: none }'
-  }));
+
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerDocument, {
+      customSiteTitle: 'SaludYa API Docs',
+      customCss: '.swagger-ui .topbar { display: none }'
+    })
+  );
 }
 
 /** Ruta de health chechk */
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", mensaje: "SaludYa API funcionando correctamente" });
+  res.json({
+    status: "ok",
+    mensaje: "SaludYa API funcionando correctamente"
+  });
 });
 
 /** Manejo de rutas no encontradas */
 app.use((req, res) => {
-  res.status(404).json({ mensaje: "Ruta no encontrada" });
+  res.status(404).json({
+    mensaje: "Ruta no encontrada"
+  });
 });
 
 /** Manejo de errores global */
 app.use((err, req, res, next) => {
   console.error(err.stack);
+
   res.status(500).json({
     mensaje: "Error interno del servidor",
-    error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    error:
+      process.env.NODE_ENV === "development"
+        ? err.message
+        : undefined,
   });
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(
-    colors.cyan.bold(`Servidor SaludYa corriendo en el puerto ${PORT}`),
-  );
-  console.log(
-    colors.cyan.bold(`Health check: http://localhost:${PORT}/api/health`),
-  );
-});
+export default app;
