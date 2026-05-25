@@ -13,7 +13,16 @@ const crearTransporter = () => {
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
-    }
+    },
+    // Forzar IPv4 (Render no soporta IPv6 saliente)
+    family: 4,
+    tls: {
+      rejectUnauthorized: false
+    },
+    // Timeouts para evitar bloqueos prolongados
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000
   });
 }
 
