@@ -20,7 +20,7 @@ const obtenerHostIPv4 = async () => {
   }
 };
 
-const crearTransporter = () => {
+const crearTransporter = async () => {
   if(!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log('Email no configurado. Los codigos se mostraran en consola')
     return null;
@@ -56,7 +56,7 @@ const generarCodigo = () => {
 
 /** Enviar correo de verificacion de cuenta */
 const enviarCodigoVerificacion = async (email, nombre, codigo) => {
-  const transporter = crearTransporter();
+  const transporter = await crearTransporter();
 
   const html= `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
@@ -112,7 +112,7 @@ const enviarCodigoVerificacion = async (email, nombre, codigo) => {
 
 /** Enviar correo de restablecimiento de contrasena */
 const enviarCodigoReset = async (email, nombre, codigo) => {
-  const transporter = crearTransporter();
+  const transporter = await crearTransporter();
 
   const html = `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
