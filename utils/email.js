@@ -4,14 +4,32 @@ import dns from 'dns';
 // Forzar resolución DNS a IPv4 primero
 dns.setDefaultResultOrder('ipv4first');
 
+let cachedHost = null;
+
+const obtenerHostIPv4 = async () => {
+  if (cachedHost) return cachedHost;
+  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+  try {
+    const { address } = await dns.lookup(host, { family: 4 });
+    cachedHost = address;
+    console.log(`SMTP usando IPv4: ${address}`);
+    return address;
+  } catch (e) {
+    console.error('No se pudo resolver IPv4 de SMTP:', e.message);
+    return host;
+  }
+};
+
 const crearTransporter = () => {
   if(!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.log('Email no configurado. Los codigos se mostraran en consola')
     return null;
   }
 
+  const host = await obtenerHostIPv4();
+
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    host,
     port: parseInt(process.env.EMAIL_PORT) || 587,
     secure: parseInt(process.env.EMAIL_PORT) === 465,
     auth: {
@@ -21,7 +39,8 @@ const crearTransporter = () => {
     // Forzar IPv4 (Render no soporta IPv6 saliente)
     family: 4,
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      servername: process.env.EMAIL_HOST || 'smtp.gmail.com'
     },
     // Timeouts para evitar bloqueos prolongados
     connectionTimeout: 10000,
