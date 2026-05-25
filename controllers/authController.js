@@ -36,7 +36,7 @@ export const registro = async (req, res) => {
         existente.codigoVerificacionExpira = new Date(Date.now() + EXPIRACION_CODIGO * 60 * 1000);
         await existente.save();
 
-        await enviarCodigoVerificacion(email, existente.nombre, codigo);
+        void enviarCodigoVerificacion(email, existente.nombre, codigo);
 
         return res.status(200).json({
           mensaje: 'Ya existe una cuenta con este correo sin verificar. Se envió un nuevo código.',
@@ -63,7 +63,7 @@ export const registro = async (req, res) => {
     });
 
     /** Enviar correo con codigo */
-    await enviarCodigoVerificacion(email, nombre, codigo);
+    void enviarCodigoVerificacion(email, nombre, codigo);
 
     res.status(201).json({
       mensjae: "Registro exitoso. Se envió un código de verificación a tu correo.",
@@ -187,7 +187,7 @@ export const login = async (req, res) => {
       usuario.codigoVerificacionExpira = new Date(Date.now() + EXPIRACION_CODIGO * 60 * 1000);
       await usuario.save();
 
-      await enviarCodigoVerificacion(email, usuario.nombre, codigo);
+      void enviarCodigoVerificacion(email, usuario.nombre, codigo);
 
       return res.status(403).json({
         mensaje: 'Tu cuenta no está verificada. Se envió un nuevo código a tu correo.',
@@ -233,7 +233,7 @@ export const solicitarReset = async (req, res) => {
     usuario.codigoResetExpira = new Date(Date.now() + EXPIRACION_CODIGO * 60 * 1000);
     await usuario.save();
 
-    await enviarCodigoReset(email, usuario.nombre, codigo);
+    void enviarCodigoReset(email, usuario.nombre, codigo);
 
     res.json({
       mensaje: 'Si el correo está registrado, recibirás un código de restablecimiento.',
