@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Forzar resolución DNS a IPv4 primero
+dns.setDefaultResultOrder('ipv4first');
 
 const crearTransporter = () => {
   if(!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
