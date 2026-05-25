@@ -1,67 +1,21 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
-import { lookup } from 'dns/promises';
+import { Resend } from 'resend';
 
-// Forzar resolución DNS a IPv4 primero
-dns.setDefaultResultOrder('ipv4first');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-let cachedHost = null;
-
-const obtenerHostIPv4 = async () => {
-  if (cachedHost) return cachedHost;
-  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
-  try {
-    const { address } = await lookup(host, { family: 4 });
-    cachedHost = address;
-    console.log(`SMTP usando IPv4: ${address}`);
-    return address;
-  } catch (e) {
-    console.error('No se pudo resolver IPv4 de SMTP:', e.message);
-    return host;
-  }
-};
-
-const crearTransporter = async () => {
-  if(!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log('Email no configurado. Los codigos se mostraran en consola')
-    return null;
-  }
-
-  const host = await obtenerHostIPv4();
-  const port = parseInt(process.env.EMAIL_PORT || '587');
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    // Forzar IPv4 (Render no soporta IPv6 saliente)
-    family: 4,
-    tls: {
-      rejectUnauthorized: false,
-      servername: process.env.EMAIL_HOST || 'smtp.gmail.com'
-    },
-    // Timeouts para evitar bloqueos prolongados
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000
-  });
-}
-
-/** Generar codigo de 6 digitos */
+/** Generar código */
 const generarCodigo = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
-}
+};
 
 /** Enviar correo de verificacion de cuenta */
 const enviarCodigoVerificacion = async (email, nombre, codigo) => {
-  const transporter = await crearTransporter();
-
-  const html= `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
+  try {
+    await resend.emails.send({
+      from: 'SaludYa <onboarding@resend.dev>',
+      to: email,
+      subject: `${codigo} - Código de verificación SaludYa`,
+      html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
       <div style="text-align: center; margin-bottom: 30px;">
         <h1 style="color: #0F5132; font-size: 28px; margin: 0;">🏥 SaludYa</h1>
         <p style="color: #6B7280; font-size: 14px;">Gestión de Citas de Fisioterapia</p>
@@ -87,37 +41,25 @@ const enviarCodigoVerificacion = async (email, nombre, codigo) => {
         © 2026 SaludYa · Todos los derechos reservados
       </p>
     </div>
-  `;
-
-  if(!transporter) {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`CÓDIGO DE VERIFICACIÓN para ${email}`);
-    console.log(`Código: ${codigo}`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    return true;
-  }
-
-  try {
-    await transporter.sendMail({
-      from: `"SaludYa" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: `${codigo} - Código de verificación SaludYa`,
-      html
+      `,
     });
-    console.log(`Correo de verificación enviado a ${email}`);
+
+    console.log(`Correo enviado a ${email}`);
     return true;
   } catch (error) {
-    console.error(`Error al enviar correo: ${error.message}`);
+    console.error(error);
     return false;
   }
-}
+};
 
-/** Enviar correo de restablecimiento de contrasena */
 const enviarCodigoReset = async (email, nombre, codigo) => {
-  const transporter = await crearTransporter();
-
-  const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
+  try {
+    await resend.emails.send({
+      from: 'SaludYa <onboarding@resend.dev>',
+      to: email,
+      subject: `${codigo} - Reset SaludYa`,
+      html: `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px;">
       <div style="text-align: center; margin-bottom: 30px;">
         <h1 style="color: #0F5132; font-size: 28px; margin: 0;">🏥 SaludYa</h1>
         <p style="color: #6B7280; font-size: 14px;">Gestión de Citas de Fisioterapia</p>
@@ -144,25 +86,18 @@ const enviarCodigoReset = async (email, nombre, codigo) => {
         © 2026 SaludYa · Todos los derechos reservados
       </p>
     </div>
-  `;
-
-  if (!transporter) {
-    return true;
-  }
-
-  try {
-    await transporter.sendMail({
-      from: `"SaludYa" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: `${codigo} - Restablecer contraseña SaludYa`,
-      html
+      `,
     });
-    console.log(`Correo de restablecimiento enviado a ${email}`);
+
     return true;
   } catch (error) {
-    console.error(`Error al enviar correo: ${error.message}`);
+    console.error(error);
     return false;
   }
 };
 
-export { enviarCodigoReset, enviarCodigoVerificacion, generarCodigo };
+export {
+  enviarCodigoReset,
+  enviarCodigoVerificacion,
+  generarCodigo,
+};
