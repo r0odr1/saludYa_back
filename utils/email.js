@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
+import { lookup } from 'dns/promises';
 
 // Forzar resolución DNS a IPv4 primero
 dns.setDefaultResultOrder('ipv4first');
@@ -10,7 +11,7 @@ const obtenerHostIPv4 = async () => {
   if (cachedHost) return cachedHost;
   const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
   try {
-    const { address } = await dns.lookup(host, { family: 4 });
+    const { address } = await lookup(host, { family: 4 });
     cachedHost = address;
     console.log(`SMTP usando IPv4: ${address}`);
     return address;
@@ -27,11 +28,12 @@ const crearTransporter = async () => {
   }
 
   const host = await obtenerHostIPv4();
+  const port = parseInt(process.env.EMAIL_PORT || '587');
 
   return nodemailer.createTransport({
     host,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: parseInt(process.env.EMAIL_PORT) === 465,
+    port,
+    secure: port === 465,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
