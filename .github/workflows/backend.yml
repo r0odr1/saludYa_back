@@ -1,0 +1,84 @@
+name: SaludYa Backend — CI
+
+# ============================================================
+# CUÁNDO SE EJECUTA
+# - Push directo a main, dev, test
+# - Pull Requests hacia main o dev (desde cualquier rama)
+# ============================================================
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - test
+  pull_request:
+    branches:
+      - main
+      - dev
+
+# ============================================================
+# JOBS
+# ============================================================
+jobs:
+
+  # ----------------------------------------------------------
+  # JOB 1: Pruebas unitarias con cobertura
+  # ----------------------------------------------------------
+  test:
+    name: 🧪 Pruebas unitarias
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout del código
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: 🧪 Correr pruebas con cobertura
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
+          JWT_SECRET: clave_secreta_para_tests_saludya_2026
+          JWT_EXPIRES_IN: 2h
+
+      - name: 📊 Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-backend-${{ github.ref_name }}
+          path: coverage/
+          retention-days: 7
+
+  # ----------------------------------------------------------
+  # JOB 2: Validación de arranque
+  # Solo en main y dev (después de que pasen las pruebas)
+  # ----------------------------------------------------------
+  build:
+    name: 🏗️ Validar arranque del servidor
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+
+    steps:
+      - name: 📥 Checkout del código
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: ✅ Verificar que server.js arranca sin errores de sintaxis
+        run: node --check server.js
