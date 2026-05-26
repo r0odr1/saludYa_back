@@ -6,6 +6,16 @@
  * expone utilidades para generar tokens y datos de prueba.
  */
 
+import { vi } from 'vitest';
+
+vi.mock('../utils/email.js', () => ({
+  generarCodigo: () => '123456',
+
+  enviarCodigoVerificacion: vi.fn().mockResolvedValue(true),
+
+  enviarCodigoReset: vi.fn().mockResolvedValue(true)
+}));
+
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
