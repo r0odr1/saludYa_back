@@ -10,11 +10,34 @@ export default defineConfig({
     // Tiempo límite por prueba (ms)
     testTimeout: 15000,
     hookTimeout: 15000,
-    // Mostrar cada prueba individual
-    reporter: 'verbose',
     // Variables de entorno para tests
     env: {
       NODE_ENV: 'test'
+    },
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      include: [
+        'controllers/**/*.js',
+        'middleware/**/*.js',
+        'models/**/*.js',
+        'utils/**/*.js',
+        'routes/**/*.js'
+      ],
+      exclude: [
+        'seeds/**',
+        'docs/**',
+        'tests/**',
+        'node_modules/**',
+        'server.js',
+        'config/**'
+      ],
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 75,
+        statements: 80
+      }
     }
   }
 });
