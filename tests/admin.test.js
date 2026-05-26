@@ -4,7 +4,11 @@
  * Cubre los 17 endpoints de /api/admin/*
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import User from '../models/User.js';
+import Doctor from '../models/Doctor.js';
+import Especialidad from '../models/Especialidad.js';
+import Cita from '../models/Cita.js';
 import request from 'supertest';
 import {
   buildApp, connectTestDB, disconnectTestDB, clearCollections,
@@ -31,6 +35,10 @@ beforeEach(async () => {
   tokenAdmin = generarToken(adminUser._id, 'admin');
   tokenPaciente = generarToken(pacienteUser._id, 'paciente');
   tokenDoctor = generarToken(doctorUser._id, 'doctor');
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 // ============================================================
@@ -468,5 +476,256 @@ describe('GET /api/admin/reportes - casos extra', () => {
       .get('/api/admin/reportes')
       .set('Authorization', `Bearer ${tokenDoctor}`);
     expect(res.status).toBe(403);
+  });
+});
+
+// MANEJO DE ERRORES 500
+
+// ESPECIALIDADES
+describe('GET /api/admin/especialidades - error 500', () => {
+  it('debe manejar errores internos al obtener especialidades', async () => {
+    vi.spyOn(Especialidad, 'find')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/especialidades')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al obtener especialidades');
+  });
+});
+
+describe('PUT /api/admin/especialidades/:id - error 500', () => {
+  it('debe manejar errores internos al actualizar especialidad', async () => {
+    const esp = await crearEspecialidadTest();
+
+    vi.spyOn(Especialidad, 'findByIdAndUpdate')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .put(`/api/admin/especialidades/${esp._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nombre: 'Nueva Especialidad' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al actualizar');
+  });
+});
+
+describe('DELETE /api/admin/especialidades/:id - error 500', () => {
+  it('debe manejar errores internos al eliminar especialidad', async () => {
+    const esp = await crearEspecialidadTest();
+
+    vi.spyOn(Especialidad, 'findByIdAndUpdate')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .delete(`/api/admin/especialidades/${esp._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al eliminar');
+  });
+});
+
+// DOCTORES
+describe('GET /api/admin/doctores - error 500', () => {
+  it('debe manejar errores internos al obtener doctores', async () => {
+    vi.spyOn(Doctor, 'find')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/doctores')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al obtener doctores');
+  });
+});
+
+describe('PUT /api/admin/doctores/:id - error 500', () => {
+  it('debe manejar errores internos al actualizar doctor', async () => {
+    const esp = await crearEspecialidadTest();
+    const doctor = await crearDoctorTest(doctorUser._id, esp._id);
+
+    vi.spyOn(Doctor, 'findByIdAndUpdate')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .put(`/api/admin/doctores/${doctor._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ activo: false });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al actualizar doctor');
+  });
+});
+
+// USUARIOS
+describe('GET /api/admin/usuarios - error 500', () => {
+  it('debe manejar errores internos al obtener usuarios', async () => {
+    vi.spyOn(User, 'find')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/usuarios')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al obtener usuarios');
+  });
+});
+
+describe('POST /api/admin/usuarios - error 500', () => {
+  it('debe manejar errores internos al crear usuario', async () => {
+    vi.spyOn(User, 'create')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .post('/api/admin/usuarios')
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({
+        nombre: 'Usuario Error',
+        email: 'error@test.com',
+        password: 'Test1234!',
+        rol: 'paciente'
+      });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al crear usuario');
+  });
+});
+
+describe('PUT /api/admin/usuarios/:id - error 500', () => {
+  it('debe manejar errores internos al actualizar usuario', async () => {
+    vi.spyOn(User, 'findByIdAndUpdate')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .put(`/api/admin/usuarios/${pacienteUser._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ nombre: 'Nuevo Nombre' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al actualizar usuario');
+  });
+});
+
+describe('DELETE /api/admin/usuarios/:id - error 500', () => {
+  it('debe manejar errores internos al eliminar usuario', async () => {
+    const usuario = await crearUsuarioTest({
+      email: 'eliminarerror@test.com'
+    });
+
+    vi.spyOn(User.prototype, 'save')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .delete(`/api/admin/usuarios/${usuario._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al eliminar usuario');
+  });
+});
+
+describe('PUT /api/admin/usuarios/:id/rol - error 500', () => {
+  it('debe manejar errores internos al cambiar rol', async () => {
+    vi.spyOn(User.prototype, 'save')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .put(`/api/admin/usuarios/${pacienteUser._id}/rol`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ rol: 'doctor' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al cambiar rol');
+  });
+});
+
+// CITAS
+describe('GET /api/admin/citas - error 500', () => {
+  it('debe manejar errores internos al listar citas', async () => {
+    vi.spyOn(Cita, 'find')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/citas')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al listar citas');
+  });
+});
+
+describe('GET /api/admin/citas/:id - error 500', () => {
+  it('debe manejar errores internos al obtener cita', async () => {
+    vi.spyOn(Cita, 'findById')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/citas/507f1f77bcf86cd799439011')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al obtener cita');
+  });
+});
+
+describe('PUT /api/admin/citas/:id - error 500', () => {
+  it('debe manejar errores internos al actualizar cita', async () => {
+    const especialidad = await crearEspecialidadTest();
+
+    const cita = await Cita.create({
+      paciente: pacienteUser._id,
+      doctor: doctorUser._id,
+      especialidad: especialidad._id,
+      fecha: new Date(),
+      horaInicio: '08:00',
+      horaFin: '08:30',
+      estado: 'agendada'
+    });
+
+    vi.spyOn(Cita.prototype, 'save')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .put(`/api/admin/citas/${cita._id}`)
+      .set('Authorization', `Bearer ${tokenAdmin}`)
+      .send({ estado: 'completada' });
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al actualizar cita');
+  });
+});
+
+describe('DELETE /api/admin/citas/:id - error 500', () => {
+  it('debe manejar errores internos al eliminar cita', async () => {
+    vi.spyOn(Cita, 'findByIdAndDelete')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .delete('/api/admin/citas/507f1f77bcf86cd799439011')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al eliminar cita');
+  });
+});
+
+// REPORTES
+describe('GET /api/admin/reportes - error 500', () => {
+  it('debe manejar errores internos al generar reportes', async () => {
+    vi.spyOn(Cita, 'aggregate')
+      .mockRejectedValueOnce(new Error('DB Error'));
+
+    const res = await request(app)
+      .get('/api/admin/reportes')
+      .set('Authorization', `Bearer ${tokenAdmin}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.mensaje).toContain('Error al generar reportes');
   });
 });
