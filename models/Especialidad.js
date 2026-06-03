@@ -28,5 +28,5 @@ const especialidadSchema = new mongoose.Schema({
   timestamps: true
 });
 
-const Especialidad = mongoose.model('Especialidad', especialidadSchema);
+const Especialidad = mongoose.models.Especialidad || mongoose.model('Especialidad', especialidadSchema);
 export default Especialidad;

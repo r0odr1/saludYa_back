@@ -76,5 +76,5 @@ citaSchema.methods.esCancelable = function() {
   return diferencia > tresHorasMs;
 };
 
-const Cita = mongoose.model('Cita', citaSchema);
+const Cita = mongoose.models.Cita || mongoose.model('Cita', citaSchema);
 export default Cita;
