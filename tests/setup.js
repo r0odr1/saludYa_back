@@ -57,6 +57,11 @@ export async function connectTestDB() {
   }
 }
 
+// Asegurar valores por defecto de env en entornos CI donde no exista .env
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'test_jwt_secret_default';
+}
+
 // Asegurar BD limpia al iniciar (evita duplicados si la DB persiste entre ejecuciones)
 export async function ensureCleanTestDB() {
   if (mongoose.connection.readyState !== 1) return;
