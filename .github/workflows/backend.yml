@@ -46,7 +46,7 @@ jobs:
         env:
           NODE_ENV: test
           MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
-          JWT_SECRET: clave_secreta_para_tests_saludya_2026
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRES_IN: 2h
 
       - name: 📊 Subir reporte de cobertura
