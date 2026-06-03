@@ -6,6 +6,16 @@
  * expone utilidades para generar tokens y datos de prueba.
  */
 
+import { vi } from 'vitest';
+
+vi.mock('../utils/email.js', () => ({
+  generarCodigo: () => '123456',
+
+  enviarCodigoVerificacion: vi.fn().mockResolvedValue(true),
+
+  enviarCodigoReset: vi.fn().mockResolvedValue(true)
+}));
+
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
@@ -36,6 +46,21 @@ export async function connectTestDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error('MONGODB_URI no definida en .env.test');
   await mongoose.connect(uri);
+  // Aseguramos que la base de datos de test esté limpia al iniciar
+  try {
+    await mongoose.connection.dropDatabase();
+  } catch (err) {
+    // Si falla, no interrumpimos la conexión, pero dejamos el error para debugging
+    // Vitest/reportes mostrarán fallos posteriores si es crítico
+    // eslint-disable-next-line no-console
+    console.warn('No se pudo limpiar la BD de test en connectTestDB:', err.message);
+  }
+}
+
+// Asegurar BD limpia al iniciar (evita duplicados si la DB persiste entre ejecuciones)
+export async function ensureCleanTestDB() {
+  if (mongoose.connection.readyState !== 1) return;
+  await mongoose.connection.dropDatabase();
 }
 
 export async function disconnectTestDB() {

@@ -439,12 +439,26 @@ export const completarCita = async (req, res) => {
       return res.status(404).json({ mensaje: 'Cita no encontrada' });
     }
 
+    const doctor = await Doctor.findById(cita.doctor);
+
+    if (!doctor) {
+      return res.status(404).json({ mensaje: 'Doctor no encontrado' });
+    }
+
+    if (doctor.usuario.toString() !== req.usuario._id.toString()) {
+      return res.status(403).json({ mensaje: 'No autorizado' });
+    }
+
     cita.estado = 'completada';
     await cita.save();
 
     res.json({ mensaje: 'Cita marcada como completada' });
+
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al completar cita', error: error.message });
+    res.status(500).json({
+      mensaje: 'Error al completar cita',
+      error: error.message
+    });
   }
 };
 
